@@ -17,30 +17,19 @@ export const registerUser = async (req, res, next) => {
     if (existing) return res.status(400).json({ message: 'Email already registered' });
 
     const hashed = await bcrypt.hash(password, 10);
-    const otp = generateOTP();
-    const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
     
-    console.log('🔑 Generated OTP:', otp);
-
     const user = await User.create({
       name,
       email,
       password: hashed,
       role,
-      otp,
-      otpExpiresAt,
-      isVerified: false, // Require email verification
+      isVerified: true, // Auto-verify on registration
     });
     
-    console.log('✅ User created:', user.email);
-
-    // Send OTP email
-    console.log('📧 Sending OTP email to:', email);
-    await sendOtpEmail(email, otp);
-    console.log('✅ OTP email sent successfully');
+    console.log('✅ User created and verified:', user.email);
 
     res.status(201).json({
-      message: 'Registration successful! Please check your email for OTP verification.',
+      message: 'Registration successful! You can now log in.',
       email: email,
     });
   } catch (err) {
@@ -115,16 +104,6 @@ export const loginUser = async (req, res, next) => {
     if (!user) {
       console.log('❌ User not found');
       return res.status(400).json({ message: 'Invalid credentials' });
-    }
-    
-    // Check if user is verified
-    if (!user.isVerified) {
-      console.log('⚠️ Email not verified for:', email);
-      return res.status(403).json({ 
-        message: 'Email not verified. Please verify your email first.',
-        needsVerification: true,
-        email: email
-      });
     }
     
     const match = await bcrypt.compare(password, user.password);

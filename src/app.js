@@ -61,6 +61,11 @@ app.get('/test-uploads', (req, res) => {
   });
 });
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'healthy' });
+});
+
 // Removed notFound and errorHandler from here, moved to server.js
 
 export default app;
