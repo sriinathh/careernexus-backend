@@ -3,7 +3,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import pdfParse from 'pdf-parse';
+import * as pdfjsLib from 'pdfjs-dist';
 import { Mistral } from '@mistralai/mistralai';
 
 const router = express.Router();
@@ -26,6 +26,31 @@ const mistral = new Mistral({
   apiKey: process.env.MISTRAL_API_KEY
 });
 
+// Helper function to extract text from PDF using pdfjs-dist
+async function extractTextFromPDF(buffer) {
+  try {
+    // Set the worker source for pdfjs-dist
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.js';
+
+    const loadingTask = pdfjsLib.getDocument({ data: buffer });
+    const pdf = await loadingTask.promise;
+
+    let fullText = '';
+
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map(item => item.str).join(' ');
+      fullText += pageText + '\n';
+    }
+
+    return fullText;
+  } catch (error) {
+    console.error('Error extracting text from PDF:', error);
+    throw new Error('Failed to extract text from PDF');
+  }
+}
+
 /**
  * POST /api/resume/analyze
  * Analyzes uploaded resume PDF using Mistral AI
@@ -47,8 +72,7 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
     // Extract text from PDF
     console.log('📄 Extracting text from PDF...');
     const dataBuffer = fs.readFileSync(filePath);
-    const pdfData = await pdfParse(dataBuffer);
-    const resumeText = pdfData.text;
+    const resumeText = await extractTextFromPDF(dataBuffer);
 
     if (!resumeText || resumeText.trim().length < 50) {
       return res.status(400).json({

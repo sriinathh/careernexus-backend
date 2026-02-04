@@ -1,14 +1,36 @@
 import fs from 'fs';
 import PDFDocument from 'pdfkit';
 import { createRequire } from 'module';
+import * as pdfjsLib from 'pdfjs-dist';
 import { llmComplete } from './llmClient.js';
 import { ResumeData, SkillProfile, LearningPath, QuizHistory, ProgressTracking, ChatbotHistory } from '../../models/AIModels.js';
 import { Course } from '../../models/DomainModels.js';
 import { User } from '../../models/User.js';
 
-// pdf-parse is a CommonJS module
-const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
+// Helper function to extract text from PDF using pdfjs-dist
+async function extractTextFromPDF(buffer) {
+  try {
+    // Set the worker source for pdfjs-dist
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.js';
+
+    const loadingTask = pdfjsLib.getDocument({ data: buffer });
+    const pdf = await loadingTask.promise;
+
+    let fullText = '';
+
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map(item => item.str).join(' ');
+      fullText += pageText + '\n';
+    }
+
+    return fullText;
+  } catch (error) {
+    console.error('Error extracting text from PDF:', error);
+    throw new Error('Failed to extract text from PDF');
+  }
+}
 
 // Helper to strip markdown code blocks from LLM responses
 const stripMarkdown = (text) => {
@@ -36,8 +58,7 @@ No extra commentary, just valid JSON.`;
 export const extractTextFromFile = async (filePath) => {
   const buffer = fs.readFileSync(filePath);
   if (filePath.toLowerCase().endsWith('.pdf')) {
-    const data = await pdfParse(buffer);
-    return data.text;
+    return await extractTextFromPDF(buffer);
   }
   return buffer.toString('utf8');
 };
